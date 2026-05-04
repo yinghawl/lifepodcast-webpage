@@ -17,6 +17,12 @@ module.exports = {
     publicPath: ""
   },
 
+  resolve: {
+    alias: {
+      "decap-cms-ui-auth": path.join(__dirname, "src/polyfills/decap-cms-ui-auth.js"),
+    }
+  },
+
 
 
 
