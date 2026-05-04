@@ -1,54 +1,63 @@
-# Hugo template for Decap CMS with Netlify Identity
+# ---- YOUTUBE STATS (CHANNEL + EPISODE) ----
+youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
 
-This is a small business template built with [Hugo](https://gohugo.io) and [Decap CMS](https://github.com/decaporg/decap-cms), designed and developed by [Darin Dimitroff](https://twitter.com/deezel), [spacefarm.digital](https://www.spacefarm.digital).
+# Channel‑level statistics
+yt_channel_resp = youtube.channels().list(
+    part="statistics,contentDetails",
+    id=CHANNEL_ID
+).execute()
 
-## Getting started
+yt_stats = yt_channel_resp['items'][0]['statistics']
+print("YouTube channel stats:", yt_stats)
 
-Use our deploy button to get your own copy of the repository. 
+# -------------------------------------------------
+# Episode‑level stats: iterate over videos in the
+# channel’s Uploads playlist and collect metrics.
+# -------------------------------------------------
+uploads_playlist_id = yt_channel_resp['items'][0]['contentDetails']\
+    ['relatedPlaylists']['uploads']
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/decaporg/one-click-hugo-cms&stack=cms)
+videos_meta = []
+next_page = None
+MAX_VIDEOS = 100  # adjust if you need more
 
-This will setup everything needed for running the CMS:
+while True:
+    playlist_resp = youtube.playlistItems().list(
+        part="contentDetails",
+        playlistId=uploads_playlist_id,
+        maxResults=50,
+        pageToken=next_page
+    ).execute()
 
-* A new repository in your GitHub account with the code
-* Full Continuous Deployment to Netlify's global CDN network
-* Control users and access with Netlify Identity
-* Manage content with Decap CMS
+    video_ids = [item['contentDetails']['videoId']
+                 for item in playlist_resp['items']]
 
-Once the initial build finishes, you can invite yourself as a user. Go to the Identity tab in your new site, click "Invite" and send yourself an invite.
+    # Get stats for this batch of videos
+    vids_resp = youtube.videos().list(
+        part="snippet,statistics",
+        id=",".join(video_ids)
+    ).execute()
 
-Now you're all set, and you can start editing content!
+    for vid in vids_resp['items']:
+        stats = vid['statistics']
+        snippet = vid['snippet']
+        videos_meta.append({
+            "video_id": vid['id'],
+            "title": snippet['title'],
+            "published_at": snippet['publishedAt'],
+            "view_count": int(stats.get('viewCount', 0)),
+            "like_count": int(stats.get('likeCount', 0)),
+            "comment_count": int(stats.get('commentCount', 0))
+        })
 
-## Local Development
+    next_page = playlist_resp.get('nextPageToken')
+    if (not next_page) or (len(videos_meta) >= MAX_VIDEOS):
+        break
 
-Clone this repository, and run `yarn` or `npm install` from the new folder to install all required dependencies.
+# Convert to DataFrame for easy analysis / export
+yt_episodes_df = pd.DataFrame(videos_meta)
+print("First few episode stats:")
+print(yt_episodes_df.head())
 
-Then start the development server with `yarn start` or `npm start`.
-
-## Testing
-
-With the development server running, run the tests locally
-with `yarn cypress:run` or `npm run cypress:run`.
-Or use `yarn cypress:open` or `npm run cypress:open` to run interactively.
-
-Cypress tests also run on deploy with the [Cypress Netlify integration](https://www.netlify.com/integrations/cypress/).
-
-## Layouts
-
-The template is based on small, content-agnostic partials that can be mixed and matched. The pre-built pages showcase just a few of the possible combinations. Refer to the `site/layouts/partials` folder for all available partials.
-
-Use Hugo’s `dict` functionality to feed content into partials and avoid repeating yourself and creating discrepancies.
-
-## CSS
-
-The template uses a custom fork of Tachyons and PostCSS with cssnext and cssnano. To customize the template for your brand, refer to `src/css/imports/_variables.css` where most of the important global variables like colors and spacing are stored.
-
-## SVG Social Icons
-
-The social media icons are in `site/assets/img`.
-Make sure you use consistent icons in terms of viewport and art direction for optimal results.
-For an icon named `icons-facebook.svg`, refer to the SVG `social-icon` partial like so:
-
-```
-{{ partial "social-icon" (dict "link" "#" "svg" "icons-facebook" "alt" "Kaldi on Facebook") }}
-```
+# Optional: persist episode‑level stats
+yt_episodes_df.to_csv("yt_episode_stats.csv", index=False)

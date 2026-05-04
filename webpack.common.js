@@ -4,6 +4,7 @@ const CopyWebpackPlugin = require("copy-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const AssetsPlugin = require("assets-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
 
 module.exports = {
   entry: {
@@ -15,6 +16,10 @@ module.exports = {
     path: path.join(__dirname, "dist"),
     publicPath: ""
   },
+
+
+
+
 
   module: {
     rules: [
@@ -29,19 +34,25 @@ module.exports = {
         loader: "babel-loader",
         test: /\.js?$/,
         exclude: /node_modules/,
-        options: {cacheDirectory: true}
+        options: { cacheDirectory: true }
+      },
+      {
+        test: /\.m?js/,
+        resolve: {
+          fullySpecified: false
+        }
       },
       {
         test: /\.(sa|sc|c)ss$/,
         exclude: /node_modules/,
         use: [
-          "style-loader", 
+          "style-loader",
           {
             loader: MiniCssExtractPlugin.loader,
             options: {
               esModule: false
             }
-          }, 
+          },
           "css-loader",
           "postcss-loader",
           {
@@ -58,6 +69,10 @@ module.exports = {
   },
 
   plugins: [
+    new webpack.NormalModuleReplacementPlugin(/^node:url$/, (resource) => {
+      resource.request = path.join(__dirname, "src/polyfills/url.js");
+    }),
+    new NodePolyfillPlugin(),
     new AssetsPlugin({
       filename: "webpack.json",
       path: path.join(process.cwd(), "site/data"),
